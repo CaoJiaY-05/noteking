@@ -73,6 +73,11 @@ class AppConfig:
     bilibili_sessdata: str = ""
     default_template: str = "detailed"
     max_concurrent_downloads: int = 3
+    # 新增：省Token优化开关
+    cache_enabled: bool = True
+    skip_existing: bool = True
+    compress_long_text: bool = True
+    max_input_tokens: int = 3500
 
     def save(self, path: Path | None = None) -> None:
         path = path or DEFAULT_CONFIG_FILE
