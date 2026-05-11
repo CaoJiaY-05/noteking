@@ -1,7 +1,10 @@
 """Global configuration management for NoteKing."""
 
 from __future__ import annotations
+from dotenv import load_dotenv
+load_dotenv()  # 自动加载 .env
 
+import os
 import json
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
@@ -55,9 +58,9 @@ class ASRConfig:
 @dataclass
 class LLMConfig:
     provider: str = "openai"
-    api_key: str = ""
-    base_url: str = ""
-    model: str = "gpt-4o-mini"
+    api_key: str = os.getenv("NOTEKING_LLM_API_KEY", "")
+    base_url: str = os.getenv("NOTEKING_LLM_BASE_URL", "")
+    model: str = os.getenv("NOTEKING_LLM_MODEL", "gpt-4o-mini")
     temperature: float = 0.3
     max_tokens: int = 16000
     language: str = "zh-CN"
@@ -70,10 +73,11 @@ class AppConfig:
     llm: LLMConfig = field(default_factory=LLMConfig)
     cache_dir: str = str(DEFAULT_CACHE_DIR)
     output_dir: str = str(DEFAULT_OUTPUT_DIR)
-    bilibili_sessdata: str = ""
+    bilibili_sessdata: str = os.getenv("BILIBILI_SESSDATA", "")
     default_template: str = "detailed"
     max_concurrent_downloads: int = 3
-    # 新增：省Token优化开关
+
+    # 省Token优化
     cache_enabled: bool = True
     skip_existing: bool = True
     compress_long_text: bool = True
@@ -99,7 +103,7 @@ class AppConfig:
                 llm=LLMConfig(**data.get("llm", {})),
                 cache_dir=data.get("cache_dir", str(DEFAULT_CACHE_DIR)),
                 output_dir=data.get("output_dir", str(DEFAULT_OUTPUT_DIR)),
-                bilibili_sessdata=data.get("bilibili_sessdata", ""),
+                bilibili_sessdata=data.get("bilibili_sessdata", os.getenv("BILIBILI_SESSDATA", "")),
                 default_template=data.get("default_template", "detailed"),
                 max_concurrent_downloads=data.get("max_concurrent_downloads", 3),
             )
