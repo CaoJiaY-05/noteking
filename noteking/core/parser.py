@@ -161,3 +161,11 @@ def is_batch(parsed: ParsedLink) -> bool:
         LinkType.CHANNEL,
         LinkType.MULTI_PART,
     )
+
+
+# ====================== 省 Token：长文本自动压缩 ======================
+def compress_text(text: str, max_length: int = 3500) -> str:
+    if len(text) > max_length:
+        return text[:max_length] + "..."
+    return text
+# ====================================================================

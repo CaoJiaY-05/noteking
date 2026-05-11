@@ -48,12 +48,10 @@ def _base_cmd(config: AppConfig) -> list[str]:
 
     cmd = ["yt-dlp", "--no-warnings"]
 
-    # 代理：配置优先，其次读环境变量
     proxy = config.proxy.for_ytdlp or os.environ.get("NOTEKING_PROXY") or os.environ.get("HTTP_PROXY")
     if proxy:
         cmd += ["--proxy", proxy]
 
-    # B站 cookies：文件优先，其次用 SESSDATA 生成临时文件
     if BILIBILI_COOKIES_FILE.exists():
         cmd += ["--cookies", str(BILIBILI_COOKIES_FILE)]
     else:
@@ -71,7 +69,6 @@ def _base_cmd(config: AppConfig) -> list[str]:
 
 
 def get_video_info(url: str, config: AppConfig) -> VideoMeta:
-    """Fetch metadata without downloading."""
     cmd = _base_cmd(config) + [
         "--dump-json",
         "--flat-playlist",
@@ -117,7 +114,13 @@ def download_subtitles(
     config: AppConfig,
     langs: str = "zh-Hans,zh-CN,zh,ai-zh,en",
 ) -> list[Path]:
-    """Download subtitles using yt-dlp."""
+    # ====================== 【缓存开启】省Token：先读缓存 ======================
+    video_id = get_video_info(url, config).extra.get("id", "")
+    cache_path = Path(config.cache_dir) / f"sub_{video_id}.json"
+    if config.cache_enabled and cache_path.exists():
+        return [Path(p) for p in json.loads(cache_path.read_text(encoding="utf-8"))]
+    # =========================================================================
+
     output_dir.mkdir(parents=True, exist_ok=True)
     cmd = _base_cmd(config) + [
         "--write-subs",
@@ -129,7 +132,16 @@ def download_subtitles(
         url,
     ]
     subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-    return list(output_dir.glob("*.srt"))
+
+    files = list(output_dir.glob("*.srt"))
+
+    # ====================== 【缓存写入】下载成功后保存 ======================
+    if config.cache_enabled and video_id and files:
+        Path(config.cache_dir).mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(json.dumps([str(f) for f in files], ensure_ascii=False), encoding="utf-8")
+    # ======================================================================
+
+    return files
 
 
 def download_audio(
@@ -137,7 +149,13 @@ def download_audio(
     output_dir: Path,
     config: AppConfig,
 ) -> Path:
-    """Extract audio from video for ASR."""
+    # ====================== 【缓存开启】 ======================
+    video_id = get_video_info(url, config).extra.get("id", "")
+    cache_path = Path(config.cache_dir) / f"audio_{video_id}.wav"
+    if config.cache_enabled and cache_path.exists():
+        return cache_path
+    # ==========================================================
+
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / "audio.wav"
     cmd = _base_cmd(config) + [
@@ -152,9 +170,18 @@ def download_audio(
         raise RuntimeError(f"Audio download failed: {result.stderr[:500]}")
 
     wavs = list(output_dir.glob("*.wav"))
-    if wavs:
-        return wavs[0]
-    raise FileNotFoundError("No WAV file produced")
+    if not wavs:
+        raise FileNotFoundError("No WAV file produced")
+
+    final = wavs[0]
+
+    # ====================== 【缓存写入】 ======================
+    if config.cache_enabled and video_id:
+        Path(config.cache_dir).mkdir(parents=True, exist_ok=True)
+        cache_path.write_bytes(final.read_bytes())
+    # ==========================================================
+
+    return final
 
 
 def download_video(
@@ -163,7 +190,6 @@ def download_video(
     config: AppConfig,
     quality: str = "best",
 ) -> Path:
-    """Download video file."""
     output_dir.mkdir(parents=True, exist_ok=True)
     cmd = _base_cmd(config) + [
         "-f", quality,
@@ -186,7 +212,6 @@ def download_thumbnail(
     output_dir: Path,
     config: AppConfig,
 ) -> Path | None:
-    """Download video thumbnail/cover image."""
     output_dir.mkdir(parents=True, exist_ok=True)
     cmd = _base_cmd(config) + [
         "--write-thumbnail",
@@ -204,7 +229,6 @@ def download_thumbnail(
 
 
 def list_playlist_entries(url: str, config: AppConfig) -> list[dict]:
-    """List all entries in a playlist/collection."""
     cmd = _base_cmd(config) + [
         "--flat-playlist",
         "--dump-json",
